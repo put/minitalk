@@ -12,10 +12,6 @@
 
 #define _XOPEN_SOURCE 700
 #define _DEFAULT_SOURCE
-#include <signal.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <string.h>
 #include "client.h"
 #include "../shared.h"
 
@@ -98,10 +94,10 @@ int	main(int argc, char **argv)
 
 	if (argc != 3)
 		return (ft_printf("Usage: ./client <server pid> <string>\n"), 1);
-	pid = atoi(argv[1]);
+	pid = ft_atoi(argv[1]);
 	if (pid < 1)
 		return (ft_printf("Invalid PID provided\n"), 1);
-	str_len = strlen(argv[2]);
+	str_len = (int)ft_strlen(argv[2]);
 	if (str_len < 1)
 		return (ft_printf("Empty string provided, nothing to send\n"), 1);
 	clientinfo()->serv_pid = pid;
