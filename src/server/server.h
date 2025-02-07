@@ -10,31 +10,36 @@
 /*																			*/
 /* ************************************************************************** */
 
-#ifndef MINITALK_SERVER_H
-# define MINITALK_SERVER_H
-# ifndef MAX_CLIENTS
-#  define MAX_CLIENTS 1024
-# endif
+#ifndef SERVER_H
+# define SERVER_H
+# include <signal.h>
 
-typedef enum clientstate_t {
+typedef enum t_clientstate
+{
 	INIT,
 	RECV_LEN,
 	RECV_STR
-} clientstate_t;
+}	t_clientstate;
 
-typedef struct recvinfo_t {
-	int pid;
-	int lenbit_count;
-	int strbit_count;
-	int str_len;
-    char curr_byte;
-    char *res;
-	clientstate_t state;
-} recvinfo_t;
+typedef struct t_client
+{
+	volatile int			pid;
+	int						lenbit_count;
+	int						strbit_count;
+	int						str_len;
+	char					curr_byte;
+	char					*res;
+	volatile t_clientstate	state;
+}	t_client;
 
-typedef struct servinfo_t {
-	int ownpid;
-	int totalclients;
-	volatile recvinfo_t clients[MAX_CLIENTS];
-} servinfo_t;
+typedef struct t_server
+{
+	int						ownpid;
+	volatile sig_atomic_t	busy;
+	volatile t_client		client;
+}	t_server;
+
+int					getbit(int signo);
+volatile t_server	*servinfo(void);
+void				handle_init(volatile t_client *client);
 #endif
