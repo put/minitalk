@@ -21,27 +21,6 @@ int	getbit(int signo)
 		return (1);
 }
 
-volatile t_server	*servinfo(void)
-{
-	static volatile t_server	info;
-	static int					first_call = 1;
-
-	if (first_call)
-	{
-		info.ownpid = 0;
-		info.busy = 0;
-		info.client.pid = 0;
-		info.client.lenbit_count = 0;
-		info.client.strbit_count = 0;
-		info.client.str_len = 0;
-		info.client.curr_byte = 0;
-		info.client.res = NULL;
-		info.client.state = INIT;
-		first_call = 0;
-	}
-	return (&info);
-}
-
 void	handle_init(volatile t_client *client)
 {
 	client->lenbit_count = 0;
@@ -51,5 +30,6 @@ void	handle_init(volatile t_client *client)
 	client->str_len = 0;
 	client->curr_byte = 0;
 	free(client->res);
+	ft_printf("Init received from %d\n", client->pid);
 	kill(client->pid, SIGUSR1);
 }

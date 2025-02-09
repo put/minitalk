@@ -14,6 +14,34 @@
 #include "server.h"
 #include "../shared.h"
 
+static t_server g_server;
+
+static volatile t_client *get_client(int pid)
+{
+	int count;
+
+	count = 0;
+	while (count < MAX_CLIENTS)
+	{
+		if (g_server.clients[count].pid == pid)
+			return (&(g_server.clients[count]));
+		count++;
+	}
+	count = 0;
+	while (count < MAX_CLIENTS)
+	{
+		if (g_server.clients[count].pid == 0
+			|| g_server.clients[count].state == DONE)
+		{
+			g_server.clients[count].pid = pid;
+			g_server.clients[count].state = INIT;
+			ft_printf("New client: %d\n", pid);
+			return (&(g_server.clients[count]));
+		}
+	}
+	return (NULL);
+}
+
 void	handle_recv_len(volatile t_client *client, int bit)
 {
 	client->lenbit_count++;
@@ -25,6 +53,7 @@ void	handle_recv_len(volatile t_client *client, int bit)
 		client->res = malloc(client->str_len + 1);
 		client->str_len *= 8;
 	}
+	ft_printf("Sending SIGUSR1 to client %d\n", client->pid);
 	kill(client->pid, SIGUSR1);
 }
 
@@ -41,16 +70,17 @@ void	handle_recv_str(volatile t_client *client, int bit)
 	{
 		client->res[client->str_len / 8] = 0;
 		ft_printf("(PID %d) -> %s\n", client->pid, client->res);
-		servinfo()->busy = 0;
-		client->state = INIT;
+		client->state = DONE;
 		free(client->res);
 		client->res = NULL;
 	}
+	ft_printf("Sending SIGUSR1 to client %d\n", client->pid);
 	kill(client->pid, SIGUSR1);
 }
 
 void	handle_client_msg(volatile t_client *client, int bit)
 {
+	ft_printf("Client msg from %d state %d\n", client->pid, client->state);
 	if (client->state == INIT)
 		handle_init(client);
 	else if (client->state == RECV_LEN)
@@ -61,27 +91,24 @@ void	handle_client_msg(volatile t_client *client, int bit)
 
 void	handle_sigusr(int signo, siginfo_t *siginf, void *context)
 {
+	volatile t_client *client;
+
 	(void)context;
-	if (siginf->si_pid != servinfo()->client.pid)
+	client = get_client(siginf->si_pid);
+	if (!client)
 	{
-		if (!servinfo()->busy)
-		{
-			servinfo()->client.pid = siginf->si_pid;
-			servinfo()->client.state = INIT;
-			servinfo()->busy = 1;
-			handle_client_msg(&(servinfo()->client), getbit(signo));
-		}
+		ft_printf("Unhandled message from %d\n", siginf->si_pid);
+		return ;
 	}
-	else if (siginf->si_pid == servinfo()->client.pid)
-		handle_client_msg(&(servinfo()->client), getbit(signo));
+	handle_client_msg(client, getbit(signo));
 }
 
 int	main(void)
 {
-	servinfo()->ownpid = getpid();
+	g_server.ownpid = getpid();
 	if (register_handlers(&handle_sigusr))
 		return (ft_printf("Failed to register handlers\n"), 1);
-	ft_printf("Server initialized with PID: %d\n", servinfo()->ownpid);
+	ft_printf("Server initialized with PID: %d\n", g_server.ownpid);
 	while (1)
 		pause();
 }

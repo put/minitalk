@@ -15,24 +15,28 @@
 #include "client.h"
 #include "../shared.h"
 
-int	register_client(void)
+void	send_sig(int pid, int sig, t_clientstate success_state)
 {
-	int	tries;
-
-	tries = 0;
-	clientinfo()->state = WAIT_INIT_CONF;
-	while (clientinfo()->state == WAIT_INIT_CONF && tries < 5000)
+	int	attempts;
+	
+	attempts = 0;
+	clientinfo()->state = WAIT_SEND;
+	ft_printf("send_sig called from PID %d\n", getpid());
+	while (clientinfo()-> state == WAIT_SEND && attempts < 500)
 	{
-		kill(clientinfo()->serv_pid, SIGUSR1);
-		usleep(1000);
-		tries++;
+		kill(pid, sig);
+		usleep(10000);
+		attempts++;
+		if (clientinfo()->state != WAIT_SEND)
+    		break;
 	}
-	if (clientinfo()->state == WAIT_INIT_CONF)
-		return (1);
-	return (0);
+	if (attempts < 500)
+		clientinfo()->state = success_state;
+	else
+		clientinfo()->state = TIMEOUT;
 }
 
-void	transmit_int(int value)
+int	transmit_int(int value)
 {
 	int	bitcount;
 	int	bit;
@@ -40,19 +44,16 @@ void	transmit_int(int value)
 	bitcount = 31;
 	while (bitcount >= 0)
 	{
-		clientinfo()->state = WAIT_INT_CONF;
 		bit = (value >> bitcount) & 1;
-		if (bit == 0)
-			kill(clientinfo()->serv_pid, SIGUSR1);
-		else
-			kill(clientinfo()->serv_pid, SIGUSR2);
+		send_sig(clientinfo()->serv_pid, bit_to_sig(bit), SENDING_INT);
+		if (clientinfo()->state == TIMEOUT)
+			return (0);
 		bitcount--;
-		while (clientinfo()->state == WAIT_INT_CONF)
-			pause();
 	}
+	return (1);
 }
 
-void	transmit_str(int str_len, char *str)
+int	transmit_str(int str_len, char *str)
 {
 	int	charcount;
 	int	bitcount;
@@ -64,18 +65,15 @@ void	transmit_str(int str_len, char *str)
 		bitcount = 7;
 		while (bitcount >= 0)
 		{
-			clientinfo()->state = WAIT_STR_CONF;
 			bit = (str[charcount] >> bitcount) & 1;
-			if (bit == 0)
-				kill(clientinfo()->serv_pid, SIGUSR1);
-			else
-				kill(clientinfo()->serv_pid, SIGUSR2);
+			send_sig(clientinfo()->serv_pid, bit_to_sig(bit), SENDING_STR);
+			if (clientinfo()->state == TIMEOUT)
+				return (0);
 			bitcount--;
-			while (clientinfo()->state == WAIT_STR_CONF)
-				pause();
 		}
 		charcount++;
 	}
+	return (1);
 }
 
 void	handle_sigusr(int signo, siginfo_t *siginf, void *context)
@@ -83,8 +81,11 @@ void	handle_sigusr(int signo, siginfo_t *siginf, void *context)
 	(void)context;
 	if (siginf->si_pid != clientinfo()->serv_pid)
 		return ;
+	ft_printf("Received signal from server on %d\n", getpid());
 	if (signo == SIGUSR1)
 		clientinfo()->state = IDLE;
+	if (signo == SIGUSR2)
+		clientinfo()->state = FAIL;
 }
 
 int	main(int argc, char **argv)
@@ -103,9 +104,12 @@ int	main(int argc, char **argv)
 	clientinfo()->serv_pid = pid;
 	if (register_handlers(&handle_sigusr))
 		return (ft_printf("Failed to register handlers\n"), 1);
-	if (register_client())
+	send_sig(clientinfo()->serv_pid, SIGUSR1, INIT_DONE);
+	if (clientinfo()->state == TIMEOUT)
 		return (ft_printf("Failed to register client, timed out\n"), 1);
-	transmit_int(str_len);
-	transmit_str(str_len, argv[2]);
+	if(!transmit_int(str_len))
+		return (ft_printf("Failed to transmit int, timed out\n"), 1);
+	if(!transmit_str(str_len, argv[2]))
+		return (ft_printf("Failed to transmit string, timed out\n"), 1);
 	return (0);
 }
